@@ -20,7 +20,7 @@
 
 //pthread
 pthread_attr_t my_attr;
-struct sched_param prio_us, prio_motor_L, prio_motor_R, prio_tuch_1, prio_tuch_2;
+struct sched_param prio_us, prio_motor, prio_driveForwards, prio_tuch_1, prio_tuch_2;
 pthread_t threads[NUM_THREADS];
 
 //ultraSonicSensor
@@ -49,10 +49,10 @@ static void ultraSonicSensor_Init();
 void *ultraSonicSensor_Run();
 static void motor_Init();
 void *motor_Run();
-void *motor_Run2();
 static void tuchSensor_Init();
 void *tuchSensor_Run();
-void *tuchSensor_Run2();
+void *driveForwards();
+
 enum commandenum
 {
 	STOP,
@@ -88,6 +88,16 @@ void order_update(int u, int d, enum commandenum c, int s)
 	}
 }
 
+void timespec_add_us(struct timespec *t, long us)
+{
+	t->tv_nsec += us*1000;
+	if(t->tv_nsec > 1000000000) 
+	{
+		t->tv_nsec = t->tv_nsec - 1000000000; // + ms*1000000
+		t->tv_sec += 1;
+	}		
+}
+
 int main()
 {
 	ClearTick();
@@ -110,29 +120,38 @@ int main()
 	{
 
 		//pthread
-		prio_us.sched_priority = 1;
-		prio_motor_L.sched_priority = 1;
-		prio_motor_R.sched_priority = 1;
-		prio_tuch_1.sched_priority = 1;
-		prio_tuch_2.sched_priority = 1;
+		prio_us.sched_priority = 4;
+		prio_motor.sched_priority = 1;
+		prio_driveForwards.sched_priority = 1;
+		prio_tuch_1.sched_priority = 5;
+		//prio_tuch_2.sched_priority = 5;
 
 		pthread_attr_init(&my_attr);
-		pthread_attr_setschedpolicy(&my_attr, SCHED_FIFO);
+		pthread_attr_setschedpolicy(&my_attr, SCHED_RR);
 		pthread_attr_setinheritsched(&my_attr, PTHREAD_EXPLICIT_SCHED);
 
 		//ultrasonic
 		pthread_attr_setschedparam(&my_attr, &prio_us);
 		pthread_create(&threads[0], &my_attr, ultraSonicSensor_Run, (void *)0);
+		
 		//motor
-		pthread_attr_setschedparam(&my_attr, &prio_motor_L);
+		pthread_attr_setschedparam(&my_attr, &prio_motor);
 		pthread_create(&threads[1], &my_attr, motor_Run, (void *)1);
-		pthread_attr_setschedparam(&my_attr, &prio_motor_R);
-		pthread_create(&threads[2], &my_attr, motor_Run2, (void *)2);
+
 		//tuch
 		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
-		pthread_create(&threads[3], &my_attr, tuchSensor_Run, (void *)3);
-		pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
-		pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
+		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
+
+		//forward
+		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
+		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
+
+
+
+//		pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
+//		pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
+//		pthread_attr_setschedparam(&my_attr, &prio_motor_R);
+//		pthread_create(&threads[2], &my_attr, motor_Run2, (void *)2);
 
 		//while true
 		while (1)
@@ -166,14 +185,20 @@ static void ultraSonicSensor_Init()
 void *ultraSonicSensor_Run()
 {
 	firstInEveryThread();
+	struct timespec next;
 
 	while (1)
 	{
 
 		val = BrickPi.Sensor[US_PORT];
 		if (val != 255 && val != 127)
-			printf("UltraSonic Results: %3.1d \n", val);
-		usleep(10000);
+		{
+			if(0 <= val && val <= 20)
+				order_update(4, 3 ,STOP , 0);
+			//printf("UltraSonic Results: %3.1d \n", val);
+		}
+		timespec_add_us(&next, 1000);
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
 
@@ -187,6 +212,7 @@ static void motor_Init()
 void *motor_Run()
 {
 	firstInEveryThread();
+	struct timespec next;
 	v = 0;
 	f = 1;
 
@@ -196,7 +222,8 @@ void *motor_Run()
 		if (order_status.duration > 0)
 		{
 			order_status.duration--;
-			BrickPi.MotorSpeed[MOTOR_PORT_L] = 200;
+			BrickPi.MotorSpeed[MOTOR_PORT_L] = 200;			
+			BrickPi.MotorSpeed[MOTOR_PORT_R] = 200;
 		}
 		else
 		{
@@ -218,44 +245,8 @@ void *motor_Run()
 					}
 			*/
 
-		usleep(10000);
-	}
-}
-
-void *motor_Run2()
-{
-	firstInEveryThread();
-	v = 0;
-	f = 1;
-
-	while (1)
-	{
-		if (order_status.duration > 0)
-		{
-			order_status.duration--;
-			BrickPi.MotorSpeed[MOTOR_PORT_R] = 200;
-		}
-		else
-		{
-			//BrickPi.MotorSpeed[MOTOR_PORT_L]=0;
-			BrickPi.MotorSpeed[MOTOR_PORT_R] = 0;
-			order_status.urgent_level = 0;
-		}
-
-		/*
-				printf("%d\n",v);
-				if(f==1) {
-					if(++v > 300) f=0;
-					BrickPi.MotorSpeed[MOTOR_PORT_L]=200;
-					BrickPi.MotorSpeed[MOTOR_PORT_R]=200;
-					}
-				else{
-					if(--v<0) f=1;
-					BrickPi.MotorSpeed[MOTOR_PORT_L]=-200;
-					BrickPi.MotorSpeed[MOTOR_PORT_R]=-200;
-					}
-			*/
-		usleep(10000);
+		timespec_add_us(&next, 1000);
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
 
@@ -270,23 +261,34 @@ static void tuchSensor_Init()
 void *tuchSensor_Run()
 {
 	firstInEveryThread();
+	struct timespec next;
 
 	while (1)
 	{
-		printf("Results Tuch Sensor1: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_1]);
-		//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2] );
-		usleep(10000);
+		if(BrickPi.Sensor[TUCH_SENSOR_PORT_1] == 1)
+		{
+			order_update(5, 5, LEFT, 100);
+			//printf("Results Tuch Sensor1: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_1]);
+		}
+		if(BrickPi.Sensor[TUCH_SENSOR_PORT_2] == 1)
+		{
+			order_update(5, 5, RIGHT, 100);
+			//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
+		}
+			timespec_add_us(&next, 1000);
+			clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
-
-void *tuchSensor_Run2()
+void *driveForwards()
 {
 	firstInEveryThread();
-
-	while (1)
+	struct timespec next;
+	while(1)
 	{
-		//printf("Results Tuch Sensor1: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_1] );
-		printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
-		usleep(10000);
-	}
+		order_update(1, 10, FORWARD, 200);
+		timespec_add_us(&next, 1000);
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+	}	
 }
+
+
