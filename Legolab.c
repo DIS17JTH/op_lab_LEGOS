@@ -12,6 +12,7 @@
 
 #include <pthread.h>
 #define NUM_THREADS 5
+#define DELAY 1000000
 
 // Compile Using:
 // sudo gcc -o program "Legolab.c" -lrt -lm -lpthread
@@ -20,7 +21,7 @@
 
 //pthread
 pthread_attr_t my_attr;
-struct sched_param prio_us, prio_motor, prio_driveForwards, prio_tuch_1, prio_tuch_2;
+struct sched_param prio_us, prio_motor, prio_driveForwards, prio_tuch_1, prio_randomFunc;
 pthread_t threads[NUM_THREADS];
 
 //ultraSonicSensor
@@ -81,6 +82,7 @@ void order_update(int u, int d, enum commandenum c, int s)
 {
 	if (u > order_status.urgent_level)
 	{
+		printf("order update");
 		order_status.urgent_level = u;
 		order_status.duration = d;
 		order_status.command = c;
@@ -91,7 +93,7 @@ void order_update(int u, int d, enum commandenum c, int s)
 void timespec_add_us(struct timespec *t, long us)
 {
 	t->tv_nsec += us*1000;
-	if(t->tv_nsec > 1000000000) 
+	if(t->tv_nsec > 1000000000)
 	{
 		t->tv_nsec = t->tv_nsec - 1000000000; // + ms*1000000
 		t->tv_sec += 1;
@@ -121,10 +123,10 @@ int main()
 
 		//pthread
 		prio_us.sched_priority = 4;
-		prio_motor.sched_priority = 1;
+		prio_motor.sched_priority = 3;
 		prio_driveForwards.sched_priority = 1;
 		prio_tuch_1.sched_priority = 5;
-		//prio_tuch_2.sched_priority = 5;
+		//prio_random.sched_priority = 5;
 
 		pthread_attr_init(&my_attr);
 		pthread_attr_setschedpolicy(&my_attr, SCHED_RR);
@@ -150,24 +152,21 @@ int main()
 
 //		pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
 //		pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
-//		pthread_attr_setschedparam(&my_attr, &prio_motor_R);
-//		pthread_create(&threads[2], &my_attr, motor_Run2, (void *)2);
 
+		
 		//while true
 		while (1)
 		{
 			result = BrickPiUpdateValues();
-			if (!result)
-			{
-				usleep(10000);
-			}
-			usleep(10000);
+			order_update(5, 50,FORWARD, 200);
+			usleep(1000);
 		}
 
 		int i;
 		for (i = 0; i < NUM_THREADS; i++)
 		{
 			pthread_join(threads[i], NULL);
+			
 		}
 
 		pthread_attr_destroy(&my_attr);
@@ -186,7 +185,7 @@ void *ultraSonicSensor_Run()
 {
 	firstInEveryThread();
 	struct timespec next;
-
+	printf("HEJ JAG HETER ULTRA\n");
 	while (1)
 	{
 
@@ -197,7 +196,8 @@ void *ultraSonicSensor_Run()
 				order_update(4, 3 ,STOP , 0);
 			//printf("UltraSonic Results: %3.1d \n", val);
 		}
-		timespec_add_us(&next, 1000);
+		// Blir 30 millisekunder
+		timespec_add_us(&next, DELAY*0.030);
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -213,6 +213,7 @@ void *motor_Run()
 {
 	firstInEveryThread();
 	struct timespec next;
+	printf("HEJ JAG HETER MOTOR\n");
 	v = 0;
 	f = 1;
 
@@ -220,15 +221,40 @@ void *motor_Run()
 	{
 
 		if (order_status.duration > 0)
-		{
+		{	printf("motorrrrrrrrrrrrr");
+			switch(order_status.command)
+			{	
+				case FORWARD:
+					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
+					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+					break;
+				case STOP:
+					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
+					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+					break;
+				case BACK:
+					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
+					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+					break;
+				case LEFT:
+					BrickPi.MotorSpeed[MOTOR_PORT_L] = 0;			
+					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+					break;
+				case RIGHT:
+					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
+					BrickPi.MotorSpeed[MOTOR_PORT_R] = 0;
+					break;
+				default:
+					break;
+			}
+			
+		
 			order_status.duration--;
-			BrickPi.MotorSpeed[MOTOR_PORT_L] = 200;			
-			BrickPi.MotorSpeed[MOTOR_PORT_R] = 200;
 		}
 		else
 		{
 			BrickPi.MotorSpeed[MOTOR_PORT_L] = 0;
-			//BrickPi.MotorSpeed[MOTOR_PORT_R]=0;
+			BrickPi.MotorSpeed[MOTOR_PORT_R]=0;
 			order_status.urgent_level = 0;
 		}
 		/*
@@ -244,8 +270,8 @@ void *motor_Run()
 					BrickPi.MotorSpeed[MOTOR_PORT_R]=-200;
 					}
 			*/
-
-		timespec_add_us(&next, 1000);
+		//Blir hundra millisekunder
+		timespec_add_us(&next, 50);//DELAY*0.100
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -262,6 +288,7 @@ void *tuchSensor_Run()
 {
 	firstInEveryThread();
 	struct timespec next;
+	printf("HEJ JAG HETER TOUCHSENSOR\n");
 
 	while (1)
 	{
@@ -275,7 +302,8 @@ void *tuchSensor_Run()
 			order_update(5, 5, RIGHT, 100);
 			//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
 		}
-			timespec_add_us(&next, 1000);
+			// Delay blir tio millisekunder
+			timespec_add_us(&next, DELAY*0.010);
 			clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -283,12 +311,11 @@ void *driveForwards()
 {
 	firstInEveryThread();
 	struct timespec next;
+	printf("HEJ JAG HETER DRIVE\n");
 	while(1)
 	{
 		order_update(1, 10, FORWARD, 200);
-		timespec_add_us(&next, 1000);
+		timespec_add_us(&next, DELAY);
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}	
 }
-
-
