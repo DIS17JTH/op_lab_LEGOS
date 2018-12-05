@@ -13,6 +13,7 @@
 #include <pthread.h>
 #define NUM_THREADS 5
 
+
 // Compile Using:
 // sudo gcc -o program "Legolab.c" -lrt -lm -lpthread
 // Run the compiled program using:
