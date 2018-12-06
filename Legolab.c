@@ -39,10 +39,10 @@ int v, f;
 
 //Bengt
 /*
-cpu_set_t cpuset; //Must be placed first in each thread function except main
-CPU_ZERO(&cpuset);
-CPU_SET(0,&cpuset);
-pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&cpuset);
+	cpu_set_t cpuset; //Must be placed first in each thread function except main
+	CPU_ZERO(&cpuset);
+	CPU_SET(0,&cpuset);
+	pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&cpuset);
 */
 
 static void ultraSonicSensor_Init();
