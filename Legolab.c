@@ -80,6 +80,7 @@ void firstInEveryThread()
 
 void order_update(int u, int d, enum commandenum c, int s)
 {
+
 	if (u > order_status.urgent_level)
 	{
 		printf("order update");
@@ -103,7 +104,7 @@ void timespec_add_us(struct timespec *t, long us)
 int main()
 {
 	ClearTick();
-
+	
 	result = BrickPiSetup();
 	printf("BrickPiSetup: %d\n", result);
 	if (result)
@@ -116,7 +117,11 @@ int main()
 	motor_Init();
 	tuchSensor_Init();
 
-	result = BrickPiSetupSensors();
+	do
+  	{
+  	result = BrickPiSetupSensors();
+  	}while(result == -1);
+
 	printf("BrickPiSetupSensors: %d\n", result);
 	if (!result)
 	{
@@ -129,24 +134,24 @@ int main()
 		//prio_random.sched_priority = 5;
 
 		pthread_attr_init(&my_attr);
-		pthread_attr_setschedpolicy(&my_attr, SCHED_RR);
+		pthread_attr_setschedpolicy(&my_attr, SCHED_FIFO);
 		pthread_attr_setinheritsched(&my_attr, PTHREAD_EXPLICIT_SCHED);
 
 		//ultrasonic
 		pthread_attr_setschedparam(&my_attr, &prio_us);
 		pthread_create(&threads[0], &my_attr, ultraSonicSensor_Run, (void *)0);
-		
+
 		//motor
 		pthread_attr_setschedparam(&my_attr, &prio_motor);
 		pthread_create(&threads[1], &my_attr, motor_Run, (void *)1);
 
 		//tuch
-		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
-		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
+//		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
+//		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
 
 		//forward
-		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
-		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
+//		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
+//		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
 
 
 
@@ -158,7 +163,7 @@ int main()
 		while (1)
 		{
 			result = BrickPiUpdateValues();
-			order_update(5, 50,FORWARD, 200);
+			//order_update(5, 50,FORWARD, 200);
 			usleep(1000);
 		}
 
@@ -184,7 +189,7 @@ static void ultraSonicSensor_Init()
 void *ultraSonicSensor_Run()
 {
 	firstInEveryThread();
-	struct timespec next;
+	struct timespec next = {0,0};
 	printf("HEJ JAG HETER ULTRA\n");
 	while (1)
 	{
@@ -192,12 +197,15 @@ void *ultraSonicSensor_Run()
 		val = BrickPi.Sensor[US_PORT];
 		if (val != 255 && val != 127)
 		{
-			if(0 <= val && val <= 20)
-				order_update(4, 3 ,STOP , 0);
-			//printf("UltraSonic Results: %3.1d \n", val);
+			if(0 <= val){
+				if(val >)
+				order_update(4, 3 ,LEFT , 100);
+				printf("UltraSonic Results: %3.1d \n", val);
+				//printf("ultra hej\n");
+			}
 		}
 		// Blir 30 millisekunder
-		timespec_add_us(&next, DELAY*0.030);
+		timespec_add_us(&next, 1000000); //long)DELAY*0.030
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -212,18 +220,18 @@ static void motor_Init()
 void *motor_Run()
 {
 	firstInEveryThread();
-	struct timespec next;
+	struct timespec next = {0,0};
 	printf("HEJ JAG HETER MOTOR\n");
 	v = 0;
 	f = 1;
 
 	while (1)
-	{
-
+	{	
+		printf("motorrrrrrrrrrrrr\n");
 		if (order_status.duration > 0)
-		{	printf("motorrrrrrrrrrrrr");
+		{	//printf("motorrrrrrrrrrrrr\n");
 			switch(order_status.command)
-			{	
+			{
 				case FORWARD:
 					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
 					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
@@ -271,7 +279,7 @@ void *motor_Run()
 					}
 			*/
 		//Blir hundra millisekunder
-		timespec_add_us(&next, 50);//DELAY*0.100
+		timespec_add_us(&next, 50000);//DELAY*0.100
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -287,7 +295,7 @@ static void tuchSensor_Init()
 void *tuchSensor_Run()
 {
 	firstInEveryThread();
-	struct timespec next;
+	struct timespec next = {0,0};
 	printf("HEJ JAG HETER TOUCHSENSOR\n");
 
 	while (1)
@@ -303,19 +311,19 @@ void *tuchSensor_Run()
 			//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
 		}
 			// Delay blir tio millisekunder
-			timespec_add_us(&next, DELAY*0.010);
+			timespec_add_us(&next, 7000);//DELAY*0.010
 			clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
 void *driveForwards()
 {
 	firstInEveryThread();
-	struct timespec next;
+	struct timespec next = {0,0};
 	printf("HEJ JAG HETER DRIVE\n");
 	while(1)
 	{
 		order_update(1, 10, FORWARD, 200);
-		timespec_add_us(&next, DELAY);
+		timespec_add_us(&next,10000); //(long)DELAY
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}	
 }
