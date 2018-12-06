@@ -25,6 +25,9 @@ pthread_attr_t my_attr;
 struct sched_param prio_us, prio_motor, prio_driveForwards, prio_tuch_1, prio_randomFunc;
 pthread_t threads[NUM_THREADS];
 
+
+pthread_mutex_t mymutex;
+
 //ultraSonicSensor
 int result, val;
 #undef DEBUG
@@ -74,7 +77,7 @@ void *motor_Run();
 static void tuchSensor_Init();
 void *tuchSensor_Run();
 void *driveForwards();
-void *randomInstuction();
+void *randomInstruction();
 
 
 int main()
@@ -104,17 +107,33 @@ int main()
 	printf("BrickPiSetupSensors: %d\n", result);
 	if (!result)
 	{
-
-		//pthread
-		prio_us.sched_priority = 4;
-		prio_motor.sched_priority = 3;
-		prio_driveForwards.sched_priority = 1;
-		prio_tuch_1.sched_priority = 5;
-		//prio_random.sched_priority = 5;
-
 		pthread_attr_init(&my_attr);
 		pthread_attr_setschedpolicy(&my_attr, SCHED_FIFO);
 		pthread_attr_setinheritsched(&my_attr, PTHREAD_EXPLICIT_SCHED);
+
+		//pthread
+		/*
+		prio_us.sched_priority = 1;
+		prio_motor.sched_priority = 1;
+		prio_driveForwards.sched_priority = 1;
+		prio_tuch_1.sched_priority = 1;
+		prio_randomFunc.sched_priority = 1;
+		*/
+		
+		prio_us.sched_priority = 1;
+		prio_motor.sched_priority = 3;
+		prio_driveForwards.sched_priority = 5;
+		prio_tuch_1.sched_priority = 4;
+		prio_randomFunc.sched_priority = 2;
+		
+		/*
+		prio_us.sched_priority = 5;
+		prio_motor.sched_priority = 4;
+		prio_driveForwards.sched_priority = 0;
+		prio_tuch_1.sched_priority = 2;
+		prio_randomFunc.sched_priority = 5;
+		*/
+
 
 		//ultrasonic
 		pthread_attr_setschedparam(&my_attr, &prio_us);
@@ -125,15 +144,15 @@ int main()
 		pthread_create(&threads[1], &my_attr, motor_Run, (void *)1);
 
 		//tuch
-		//		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
-		//		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
+		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
+		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
 
 		//forward
-		//		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
-		//		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
+		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
+		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
 
-		//		pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
-		//		pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
+		pthread_attr_setschedparam(&my_attr, &prio_randomFunc);
+		pthread_create(&threads[4], &my_attr, randomInstruction, (void *)4);
 
 		//while true
 		while (1)
@@ -153,6 +172,16 @@ int main()
 	}
 
 	return 0;
+}
+
+void timespec_add_us(struct timespec *t, long us)
+{
+	t->tv_nsec += us * 1000;
+	if (t->tv_nsec > 1000000000)
+	{
+		t->tv_nsec = t->tv_nsec - 1000000000; // + ms*1000000
+		t->tv_sec += 1;
+	}
 }
 
 void firstInEveryThread()
@@ -182,15 +211,17 @@ void *ultraSonicSensor_Run()
 		{
 			if (0 <= val)
 			{
-				if (val > 10 && val < 30)
-					order_update(4, 10, LEFT, 100);
-				printf("UltraSonic Results: %3.1d \n", val);
+				if (val > 10 && val < 30){
+					order_update(4, 1000, BACK, -200);
+					printf("UltraSonic Results: %3.1d \n", val);
+				}
 				//printf("ultra hej\n");
 			}
 		}
 		// Blir 30 millisekunder
 		timespec_add_us(&next, 100*1000); //long)DELAY*0.030
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+		usleep(100*1000);
 	}
 }
 
@@ -211,9 +242,10 @@ void *motor_Run()
 
 	while (1)
 	{
-		printf("motorrrrrrrrrrrrr\n");
+		//printf("motorrrrrrrrrrrrr\n");
+		pthread_mutex_lock(&mymutex);
 		if (order_status.duration > 0)
-		{ //printf("motorrrrrrrrrrrrr\n");
+		{ printf("motorrrrrrrrrrrrr %d\n", order_status.duration);
 			switch (order_status.command)
 			{
 			case FORWARD:
@@ -248,22 +280,12 @@ void *motor_Run()
 			BrickPi.MotorSpeed[MOTOR_PORT_R] = 0;
 			order_status.urgent_level = 0;
 		}
-		/*
-				printf("%d\n",v);
-				if(f==1) {
-					if(++v > 300) f=0;
-					BrickPi.MotorSpeed[MOTOR_PORT_L]=200;
-					BrickPi.MotorSpeed[MOTOR_PORT_R]=200;
-					}
-				else{
-					if(--v<0) f=1;
-					BrickPi.MotorSpeed[MOTOR_PORT_L]=-200;
-					BrickPi.MotorSpeed[MOTOR_PORT_R]=-200;
-					}
-			*/
+		pthread_mutex_unlock(&mymutex);
+
 		//Blir hundra millisekunder
 		timespec_add_us(&next, 3000); //DELAY*0.100
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+		usleep(3000);
 	}
 }
 
@@ -285,17 +307,18 @@ void *tuchSensor_Run()
 	{
 		if (BrickPi.Sensor[TUCH_SENSOR_PORT_1] == 1)
 		{
-			order_update(4, 50, LEFT, 100);
+			order_update(4, 500, LEFT, 150);
 			//printf("Results Tuch Sensor1: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_1]);
 		}
 		if (BrickPi.Sensor[TUCH_SENSOR_PORT_2] == 1)
 		{
-			order_update(4, 50, RIGHT, 100);
+			order_update(4, 500, RIGHT, 150);
 			//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
 		}
 		// Delay blir tio millisekunder
 		timespec_add_us(&next, 2000); //DELAY*0.010
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+		usleep(2000);
 	}
 }
 void *driveForwards()
@@ -304,37 +327,50 @@ void *driveForwards()
 	struct timespec next = {0, 0};
 	printf("HEJ JAG HETER DRIVE\n");
 	while (1)
-	{
+	{	
 		order_update(1, 1000, FORWARD, 200);
 		timespec_add_us(&next, 1000); //(long)DELAY
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+		usleep(1000);
 	}
 }
 
 void order_update(int u, int d, enum commandenum c, int s)
 {
-
+	pthread_mutex_lock(&mymutex);
+	//printf("order update: %d | %d \n", order_status.urgent_level, u);
 	if (u > order_status.urgent_level)
 	{
-		printf("order update");
+		printf("order update: ");
 		order_status.urgent_level = u;
 		order_status.duration = d;
 		order_status.command = c;
 		order_status.speed = s;
 	}
+	pthread_mutex_unlock(&mymutex);
 }
 
-void timespec_add_us(struct timespec *t, long us)
+void *randomInstruction()
 {
-	t->tv_nsec += us * 1000;
-	if (t->tv_nsec > 1000000000)
+	firstInEveryThread();
+	struct timespec next = {0, 0};
+	printf("HEJ JAG HETER RAND\n");
+	int randNum = 1000;
+	while (1)
 	{
-		t->tv_nsec = t->tv_nsec - 1000000000; // + ms*1000000
-		t->tv_sec += 1;
-	}
-}
+		
+		printf("---------------Random Number: %d \n", randNum);
+		
 
-void *randomInstuction()
-{
-	printf("Random Number: %d ", rand());
+		if(randNum > 0)
+			randNum--;
+		else{
+			order_update(2, 1000, STOP, 0);
+			randNum = rand()%1000 + 100;
+		}
+
+		timespec_add_us(&next, 10*2000); //(long)DELAY
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+		usleep(10*2000);
+	}
 }
