@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+#include <stdlib.h>
 
 #include "tick.h"
 #include "BrickPi.h"
@@ -46,6 +47,9 @@ int v, f;
 	pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&cpuset);
 */
 
+void firstInEveryThread();
+void order_update(int u, int d, enum commandenum c, int s);
+void timespec_add_us(struct timespec *t, long us);
 static void ultraSonicSensor_Init();
 void *ultraSonicSensor_Run();
 static void motor_Init();
@@ -53,6 +57,7 @@ void *motor_Run();
 static void tuchSensor_Init();
 void *tuchSensor_Run();
 void *driveForwards();
+void *randomInstuction();
 
 enum commandenum
 {
@@ -68,47 +73,19 @@ struct order
 	int duration;
 	enum commandenum command;
 	int speed;
-} order_status;
-
-void firstInEveryThread()
-{
-	cpu_set_t cpuset; //Must be placed first in each thread function except main
-	CPU_ZERO(&cpuset);
-	CPU_SET(0, &cpuset);
-	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-}
-
-void order_update(int u, int d, enum commandenum c, int s)
-{
-
-	if (u > order_status.urgent_level)
-	{
-		printf("order update");
-		order_status.urgent_level = u;
-		order_status.duration = d;
-		order_status.command = c;
-		order_status.speed = s;
-	}
-}
-
-void timespec_add_us(struct timespec *t, long us)
-{
-	t->tv_nsec += us*1000;
-	if(t->tv_nsec > 1000000000)
-	{
-		t->tv_nsec = t->tv_nsec - 1000000000; // + ms*1000000
-		t->tv_sec += 1;
-	}		
-}
+} order_status = {0, 0, STOP, 0};
 
 int main()
 {
 	ClearTick();
-	
+	srand(time(NULL));
+
 	result = BrickPiSetup();
 	printf("BrickPiSetup: %d\n", result);
 	if (result)
+	{
 		return 0;
+	}
 
 	BrickPi.Address[0] = 1;
 	BrickPi.Address[1] = 2;
@@ -118,9 +95,9 @@ int main()
 	tuchSensor_Init();
 
 	do
-  	{
-  	result = BrickPiSetupSensors();
-  	}while(result == -1);
+	{
+		result = BrickPiSetupSensors();
+	} while (result == -1);
 
 	printf("BrickPiSetupSensors: %d\n", result);
 	if (!result)
@@ -146,19 +123,16 @@ int main()
 		pthread_create(&threads[1], &my_attr, motor_Run, (void *)1);
 
 		//tuch
-//		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
-//		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
+		//		pthread_attr_setschedparam(&my_attr, &prio_tuch_1);
+		//		pthread_create(&threads[2], &my_attr, tuchSensor_Run, (void *)2);
 
 		//forward
-//		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
-//		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
+		//		pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
+		//		pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
 
+		//		pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
+		//		pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
 
-
-//		pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
-//		pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
-
-		
 		//while true
 		while (1)
 		{
@@ -171,13 +145,20 @@ int main()
 		for (i = 0; i < NUM_THREADS; i++)
 		{
 			pthread_join(threads[i], NULL);
-			
 		}
 
 		pthread_attr_destroy(&my_attr);
 	}
 
 	return 0;
+}
+
+void firstInEveryThread()
+{
+	cpu_set_t cpuset; //Must be placed first in each thread function except main
+	CPU_ZERO(&cpuset);
+	CPU_SET(0, &cpuset);
+	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 }
 
 static void ultraSonicSensor_Init()
@@ -189,7 +170,7 @@ static void ultraSonicSensor_Init()
 void *ultraSonicSensor_Run()
 {
 	firstInEveryThread();
-	struct timespec next = {0,0};
+	struct timespec next = {0, 0};
 	printf("HEJ JAG HETER ULTRA\n");
 	while (1)
 	{
@@ -197,15 +178,16 @@ void *ultraSonicSensor_Run()
 		val = BrickPi.Sensor[US_PORT];
 		if (val != 255 && val != 127)
 		{
-			if(0 <= val){
-				if(val >)
-				order_update(4, 3 ,LEFT , 100);
+			if (0 <= val)
+			{
+				if (val >)
+					order_update(4, 3, LEFT, 100);
 				printf("UltraSonic Results: %3.1d \n", val);
 				//printf("ultra hej\n");
 			}
 		}
 		// Blir 30 millisekunder
-		timespec_add_us(&next, 1000000); //long)DELAY*0.030
+		timespec_add_us(&next, 100000); //long)DELAY*0.030
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -220,49 +202,48 @@ static void motor_Init()
 void *motor_Run()
 {
 	firstInEveryThread();
-	struct timespec next = {0,0};
+	struct timespec next = {0, 0};
 	printf("HEJ JAG HETER MOTOR\n");
 	v = 0;
 	f = 1;
 
 	while (1)
-	{	
+	{
 		printf("motorrrrrrrrrrrrr\n");
 		if (order_status.duration > 0)
-		{	//printf("motorrrrrrrrrrrrr\n");
-			switch(order_status.command)
+		{ //printf("motorrrrrrrrrrrrr\n");
+			switch (order_status.command)
 			{
-				case FORWARD:
-					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
-					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
-					break;
-				case STOP:
-					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
-					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
-					break;
-				case BACK:
-					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
-					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
-					break;
-				case LEFT:
-					BrickPi.MotorSpeed[MOTOR_PORT_L] = 0;			
-					BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
-					break;
-				case RIGHT:
-					BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;			
-					BrickPi.MotorSpeed[MOTOR_PORT_R] = 0;
-					break;
-				default:
-					break;
+			case FORWARD:
+				BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;
+				BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+				break;
+			case STOP:
+				BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;
+				BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+				break;
+			case BACK:
+				BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;
+				BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+				break;
+			case LEFT:
+				BrickPi.MotorSpeed[MOTOR_PORT_L] = 0;
+				BrickPi.MotorSpeed[MOTOR_PORT_R] = order_status.speed;
+				break;
+			case RIGHT:
+				BrickPi.MotorSpeed[MOTOR_PORT_L] = order_status.speed;
+				BrickPi.MotorSpeed[MOTOR_PORT_R] = 0;
+				break;
+			default:
+				break;
 			}
-			
-		
+
 			order_status.duration--;
 		}
 		else
 		{
 			BrickPi.MotorSpeed[MOTOR_PORT_L] = 0;
-			BrickPi.MotorSpeed[MOTOR_PORT_R]=0;
+			BrickPi.MotorSpeed[MOTOR_PORT_R] = 0;
 			order_status.urgent_level = 0;
 		}
 		/*
@@ -279,7 +260,7 @@ void *motor_Run()
 					}
 			*/
 		//Blir hundra millisekunder
-		timespec_add_us(&next, 50000);//DELAY*0.100
+		timespec_add_us(&next, 50000); //DELAY*0.100
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -295,35 +276,63 @@ static void tuchSensor_Init()
 void *tuchSensor_Run()
 {
 	firstInEveryThread();
-	struct timespec next = {0,0};
+	struct timespec next = {0, 0};
 	printf("HEJ JAG HETER TOUCHSENSOR\n");
 
 	while (1)
 	{
-		if(BrickPi.Sensor[TUCH_SENSOR_PORT_1] == 1)
+		if (BrickPi.Sensor[TUCH_SENSOR_PORT_1] == 1)
 		{
 			order_update(5, 5, LEFT, 100);
 			//printf("Results Tuch Sensor1: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_1]);
 		}
-		if(BrickPi.Sensor[TUCH_SENSOR_PORT_2] == 1)
+		if (BrickPi.Sensor[TUCH_SENSOR_PORT_2] == 1)
 		{
 			order_update(5, 5, RIGHT, 100);
 			//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
 		}
-			// Delay blir tio millisekunder
-			timespec_add_us(&next, 7000);//DELAY*0.010
-			clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
+		// Delay blir tio millisekunder
+		timespec_add_us(&next, 70000); //DELAY*0.010
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
 void *driveForwards()
 {
 	firstInEveryThread();
-	struct timespec next = {0,0};
+	struct timespec next = {0, 0};
 	printf("HEJ JAG HETER DRIVE\n");
-	while(1)
+	while (1)
 	{
 		order_update(1, 10, FORWARD, 200);
-		timespec_add_us(&next,10000); //(long)DELAY
+		timespec_add_us(&next, 10000); //(long)DELAY
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
-	}	
+	}
+}
+
+void order_update(int u, int d, enum commandenum c, int s)
+{
+
+	if (u > order_status.urgent_level)
+	{
+		printf("order update");
+		order_status.urgent_level = u;
+		order_status.duration = d;
+		order_status.command = c;
+		order_status.speed = s;
+	}
+}
+
+void timespec_add_us(struct timespec *t, long us)
+{
+	t->tv_nsec += us * 1000;
+	if (t->tv_nsec > 1000000000)
+	{
+		t->tv_nsec = t->tv_nsec - 1000000000; // + ms*1000000
+		t->tv_sec += 1;
+	}
+}
+
+void *randomInstuction()
+{
+	printf("Random Number: %d ", rand());
 }
