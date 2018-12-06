@@ -47,18 +47,6 @@ int v, f;
 	pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&cpuset);
 */
 
-void firstInEveryThread();
-void order_update(int u, int d, enum commandenum c, int s);
-void timespec_add_us(struct timespec *t, long us);
-static void ultraSonicSensor_Init();
-void *ultraSonicSensor_Run();
-static void motor_Init();
-void *motor_Run();
-static void tuchSensor_Init();
-void *tuchSensor_Run();
-void *driveForwards();
-void *randomInstuction();
-
 enum commandenum
 {
 	STOP,
@@ -73,7 +61,21 @@ struct order
 	int duration;
 	enum commandenum command;
 	int speed;
-} order_status = {0, 0, STOP, 0};
+} order_status;
+
+
+void firstInEveryThread();
+void order_update(int u, int d, enum commandenum c, int s);
+void timespec_add_us(struct timespec *t, long us);
+static void ultraSonicSensor_Init();
+void *ultraSonicSensor_Run();
+static void motor_Init();
+void *motor_Run();
+static void tuchSensor_Init();
+void *tuchSensor_Run();
+void *driveForwards();
+void *randomInstuction();
+
 
 int main()
 {
@@ -180,7 +182,7 @@ void *ultraSonicSensor_Run()
 		{
 			if (0 <= val)
 			{
-				if (val >)
+				if (val > 10 && val < 30)
 					order_update(4, 3, LEFT, 100);
 				printf("UltraSonic Results: %3.1d \n", val);
 				//printf("ultra hej\n");

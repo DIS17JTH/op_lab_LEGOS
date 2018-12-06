@@ -48,6 +48,24 @@ int v, f;
 	pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&cpuset);
 */
 
+enum commandenum
+{
+    STOP,
+    FORWARD,
+    BACK,
+    LEFT,
+    RIGHT
+};
+
+struct order
+{
+    int urgent_level;
+    int duration;
+    enum commandenum command;
+    int speed;
+} order_status;
+
+
 void firstInEveryThread();
 void order_update(int u, int d, enum commandenum c, int s);
 void timespec_add_us(struct timespec *t, long us);
@@ -60,21 +78,6 @@ void *tuchSensor_Run();
 void *driveForwards();
 void *randomInstuction();
 
-enum commandenum
-{
-    STOP,
-    FORWARD,
-    BACK,
-    LEFT,
-    RIGHT
-};
-struct order
-{
-    int urgent_level;
-    int duration;
-    enum commandenum command;
-    int speed;
-} order_status = {0, 0, STOP, 0};
 
 int main()
 {
@@ -109,13 +112,13 @@ int main()
         prio_motor.sched_priority = 1;
         prio_driveForwards.sched_priority = 1;
         prio_tuch_1.sched_priority = 1;
-        prio_random.sched_priority = 1;
+        prio_randomFunc.sched_priority = 1;
         /*
         prio_us.sched_priority = 4;
 		prio_motor.sched_priority = 3;
 		prio_driveForwards.sched_priority = 1;
 		prio_tuch_1.sched_priority = 5;
-		prio_random.sched_priority = 5;
+		prio_randomFunc.sched_priority = 5;
 */
 
         pthread_attr_init(&my_attr);
@@ -138,8 +141,8 @@ int main()
         pthread_attr_setschedparam(&my_attr, &prio_driveForwards);
         pthread_create(&threads[3], &my_attr, driveForwards, (void *)3);
 
-        pthread_attr_setschedparam(&my_attr, &prio_tuch_2);
-        pthread_create(&threads[4], &my_attr, tuchSensor_Run2, (void *)4);
+        pthread_attr_setschedparam(&my_attr, &prio_randomFunc);
+        pthread_create(&threads[4], &my_attr, randomInstuction, (void *)4);
 
         //while true
         while (1)
@@ -188,7 +191,7 @@ void *ultraSonicSensor_Run()
         {
             if (0 <= val)
             {
-                if (val >)
+                if (val > 10 && val < 30)
                     order_update(4, 3, LEFT, 100);
                 printf("UltraSonic Results: %3.1d \n", val);
                 //printf("ultra hej\n");
