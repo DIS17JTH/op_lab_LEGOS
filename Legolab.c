@@ -183,13 +183,13 @@ void *ultraSonicSensor_Run()
 			if (0 <= val)
 			{
 				if (val > 10 && val < 30)
-					order_update(4, 3, LEFT, 100);
+					order_update(4, 10, LEFT, 100);
 				printf("UltraSonic Results: %3.1d \n", val);
 				//printf("ultra hej\n");
 			}
 		}
 		// Blir 30 millisekunder
-		timespec_add_us(&next, 100000); //long)DELAY*0.030
+		timespec_add_us(&next, 100*1000); //long)DELAY*0.030
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -262,7 +262,7 @@ void *motor_Run()
 					}
 			*/
 		//Blir hundra millisekunder
-		timespec_add_us(&next, 50000); //DELAY*0.100
+		timespec_add_us(&next, 3000); //DELAY*0.100
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -285,16 +285,16 @@ void *tuchSensor_Run()
 	{
 		if (BrickPi.Sensor[TUCH_SENSOR_PORT_1] == 1)
 		{
-			order_update(5, 5, LEFT, 100);
+			order_update(4, 50, LEFT, 100);
 			//printf("Results Tuch Sensor1: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_1]);
 		}
 		if (BrickPi.Sensor[TUCH_SENSOR_PORT_2] == 1)
 		{
-			order_update(5, 5, RIGHT, 100);
+			order_update(4, 50, RIGHT, 100);
 			//printf("Results Tuch Sensor2: %3.1d \n", BrickPi.Sensor[TUCH_SENSOR_PORT_2]);
 		}
 		// Delay blir tio millisekunder
-		timespec_add_us(&next, 70000); //DELAY*0.010
+		timespec_add_us(&next, 2000); //DELAY*0.010
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
@@ -305,8 +305,8 @@ void *driveForwards()
 	printf("HEJ JAG HETER DRIVE\n");
 	while (1)
 	{
-		order_update(1, 10, FORWARD, 200);
-		timespec_add_us(&next, 10000); //(long)DELAY
+		order_update(1, 1000, FORWARD, 200);
+		timespec_add_us(&next, 1000); //(long)DELAY
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next, NULL);
 	}
 }
